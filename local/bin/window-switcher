@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Alt-Tab window switcher for Hyprland: lists windows in most-recently-used
+# order and focuses whatever you pick. focusHistoryID 0 is the window you are
+# on, so it gets rotated to the bottom and the previous window sits on row one
+# -- tap Alt+Tab, press Enter, you are back where you were.
+set -euo pipefail
+
+map=$(mktemp -p "${XDG_RUNTIME_DIR:-/tmp}" switcher.XXXXXX)
+trap 'rm -f "$map"' EXIT
+
+hyprctl clients -j \
+  | jq -r '
+      [ .[] | select(.mapped and (.title | length > 0)) ]
+      | sort_by(.focusHistoryID)
+      | (.[1:] + .[:1])
+      | .[]
+      | [ .workspace.name, .class, .title, .address ] | @tsv' \
+  | awk -F'\t' '{ printf "%s\t%s\n", sprintf("%-4s %-20.20s %.60s", $1, $2, $3), $4 }' \
+  > "$map"
+
+[ -s "$map" ] || exit 0
+
+sel=$(cut -f1 "$map" | wofi --dmenu \
+        --conf "$HOME/.config/wofi/switcher.conf" \
+        --style "$HOME/.config/wofi/switcher.css") || exit 0
+[ -n "$sel" ] || exit 0
+
+addr=$(awk -F'\t' -v s="$sel" '$1 == s { print $2; exit }' "$map")
+[ -n "$addr" ] || exit 0
+
+hyprctl dispatch focuswindow "address:$addr" >/dev/null
+hyprctl dispatch bringactivetotop >/dev/null

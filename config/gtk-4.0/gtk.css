@@ -1,0 +1,30 @@
+/* Violet Night: libadwaita colour overrides */
+@define-color accent_color #b197fc;
+@define-color accent_bg_color #7c4dff;
+@define-color accent_fg_color #ffffff;
+
+@define-color destructive_color #ff8fab;
+@define-color destructive_bg_color #e0456b;
+@define-color success_color #7ee2b0;
+@define-color warning_color #ffd479;
+@define-color error_color #ff8fab;
+
+@define-color window_bg_color #12101c;
+@define-color window_fg_color #e6e1f5;
+@define-color view_bg_color #171425;
+@define-color view_fg_color #e6e1f5;
+@define-color headerbar_bg_color #1a1729;
+@define-color headerbar_fg_color #e6e1f5;
+@define-color headerbar_backdrop_color #12101c;
+@define-color sidebar_bg_color #15121f;
+@define-color sidebar_fg_color #e6e1f5;
+@define-color sidebar_backdrop_color #13101d;
+@define-color secondary_sidebar_bg_color #13101d;
+@define-color card_bg_color #211d33;
+@define-color card_fg_color #e6e1f5;
+@define-color dialog_bg_color #1d1a2e;
+@define-color dialog_fg_color #e6e1f5;
+@define-color popover_bg_color #1d1a2e;
+@define-color popover_fg_color #e6e1f5;
+@define-color thumbnail_bg_color #211d33;
+@define-color shade_color rgba(0, 0, 0, 0.36);

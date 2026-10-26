@@ -1,0 +1,52 @@
+// flexfetch — a spoofed fastfetch for screenshots. Every line is a hardcoded
+// custom module, so nothing here reads a real value off this machine.
+// Run with:  fastfetch -c ~/.config/fastfetch/flex.jsonc
+{
+    "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+    "logo": {
+        "source": "arch",
+        "padding": { "top": 1, "right": 3 }
+    },
+    "display": {
+        "separator": "  "
+    },
+    "modules": [
+        { "type": "custom", "format": "\u001b[90m                     \u001b[1;36mmohammed@obsidian\u001b[0m" },
+        { "type": "custom", "format": "\u001b[90m                     ─────────────────\u001b[0m" },
+
+        { "type": "custom", "key": "  OS",        "keyColor": "cyan",    "format": "Arch Linux x86_64" },
+        { "type": "custom", "key": "  Host",      "keyColor": "cyan",    "format": "ASUS ROG Crosshair X870E Hero" },
+        { "type": "custom", "key": "  Kernel",    "keyColor": "cyan",    "format": "6.12.9-zen1-1-zen" },
+        { "type": "custom", "key": "  Uptime",    "keyColor": "cyan",    "format": "4 days, 7 hours, 12 mins" },
+        { "type": "custom", "key": "  Packages",  "keyColor": "cyan",    "format": "1847 (pacman), 63 (flatpak), 29 (AUR)" },
+        { "type": "custom", "key": "  Shell",     "keyColor": "cyan",    "format": "zsh 5.9" },
+
+        { "type": "custom", "format": "" },
+
+        { "type": "custom", "key": "  WM",        "keyColor": "green",   "format": "Hyprland (Wayland)" },
+        { "type": "custom", "key": "  Theme",     "keyColor": "green",   "format": "Forest Dusk [GTK2/3]" },
+        { "type": "custom", "key": "  Icons",     "keyColor": "green",   "format": "Papirus-Dark" },
+        { "type": "custom", "key": "  Cursor",    "keyColor": "green",   "format": "Win11-Concept-Dark (24px)" },
+        { "type": "custom", "key": "  Terminal",  "keyColor": "green",   "format": "kitty 0.44.0" },
+        { "type": "custom", "key": "  Font",      "keyColor": "green",   "format": "JetBrainsMono Nerd Font (11.5pt)" },
+
+        { "type": "custom", "format": "" },
+
+        { "type": "custom", "key": "  CPU",       "keyColor": "yellow",  "format": "AMD Ryzen 9 9950X3D (32) @ 5.75 GHz" },
+        { "type": "custom", "key": "  GPU",       "keyColor": "yellow",  "format": "NVIDIA GeForce RTX 5090 [Discrete]" },
+        { "type": "custom", "key": "  GPU Driver","keyColor": "yellow",  "format": "nvidia 570.86.16" },
+        { "type": "custom", "key": "  Memory",    "keyColor": "yellow",  "format": "14.21 GiB / 128.00 GiB (11%)" },
+        { "type": "custom", "key": "  Swap",      "keyColor": "yellow",  "format": "0 B / 32.00 GiB (0%)" },
+        { "type": "custom", "key": "  Disk (/)",  "keyColor": "yellow",  "format": "1.84 TiB / 8.00 TiB (23%) - btrfs" },
+        { "type": "custom", "key": "  Display",   "keyColor": "yellow",  "format": "3840x2160 @ 240 Hz [Primary]" },
+        { "type": "custom", "key": "  Display",   "keyColor": "yellow",  "format": "2560x1440 @ 165 Hz" },
+
+        { "type": "custom", "format": "" },
+
+        { "type": "custom", "key": "  Locale",    "keyColor": "magenta", "format": "en_US.UTF-8" },
+
+        { "type": "custom", "format": "" },
+        { "type": "custom", "format": "   \u001b[40m   \u001b[41m   \u001b[42m   \u001b[43m   \u001b[44m   \u001b[45m   \u001b[46m   \u001b[47m   \u001b[0m" },
+        { "type": "custom", "format": "   \u001b[100m   \u001b[101m   \u001b[102m   \u001b[103m   \u001b[104m   \u001b[105m   \u001b[106m   \u001b[107m   \u001b[0m" }
+    ]
+}

@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Keeps the Deck's built-in panel out of the way while docked: eDP-1 is disabled
+# whenever another output is connected and comes back the moment it is not, so
+# undocking can never leave the session with nothing to draw on.
+#
+# Hyprland emits monitoradded/monitorremoved on .socket2.sock, so this reacts to
+# hotplug instead of polling. wlr-output-management is missing from this build,
+# which is why the toggling goes through hyprctl rather than wlr-randr.
+set -uo pipefail
+
+DECK='eDP-1'
+DECK_ON="$DECK, preferred, auto, 1, transform, 3"
+DECK_OFF="$DECK, disable"
+
+apply() {
+    # count the enabled outputs that are not the Deck's own panel
+    local externals
+    externals=$(hyprctl monitors all -j \
+        | jq --arg deck "$DECK" '[ .[] | select(.name != $deck and (.disabled | not)) ] | length')
+
+    if [ "${externals:-0}" -gt 0 ]; then
+        hyprctl keyword monitor "$DECK_OFF" >/dev/null
+    else
+        hyprctl keyword monitor "$DECK_ON" >/dev/null
+    fi
+
+    # an output that has just been enabled has no wallpaper on it, and since
+    # hyprpaper is driven over IPC here rather than from its config, nothing
+    # else puts one back
+    "$HOME/.local/bin/wallpaper" >/dev/null 2>&1 || true
+}
+
+apply
+
+sock="${XDG_RUNTIME_DIR}/hypr/${HYPRLAND_INSTANCE_SIGNATURE}/.socket2.sock"
+[ -S "$sock" ] || exit 0
+
+socat -U - "UNIX-CONNECT:$sock" | while read -r line; do
+    case "$line" in
+        monitoradded*|monitorremoved*) apply ;;
+    esac
+done

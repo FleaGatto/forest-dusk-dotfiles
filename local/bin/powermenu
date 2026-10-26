@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Forest Dusk power menu
+#
+#   powermenu            full menu
+#   powermenu <action>   straight to the confirmation for one action
+#                        (lock|suspend|logout|reboot|poweroff|gaming)
+
+set -uo pipefail
+
+STYLE="$HOME/.config/wofi/style.css"
+
+menu() {
+    local prompt=$1 width=$2 height=$3
+    wofi --show dmenu --prompt "$prompt" --width "$width" --height "$height" \
+         --cache-file /dev/null --insensitive --style "$STYLE"
+}
+
+confirm() {
+    printf '  Cancel\n  %s\n' "$1" | menu "$1?" 300 190 | grep -q "$1"
+}
+
+run() {
+    case "$1" in
+        lock)     hyprlock ;;
+        suspend)  systemctl suspend ;;
+        logout)   confirm "Log out"     && hyprctl dispatch exit ;;
+        reboot)   confirm "Restart"     && systemctl reboot ;;
+        poweroff) confirm "Shut down"   && systemctl poweroff ;;
+        gaming)   confirm "Gaming Mode" && steamos-session-select gamescope ;;
+    esac
+}
+
+if [[ $# -gt 0 ]]; then
+    run "$1"
+    exit
+fi
+
+choice=$(printf '  Lock\n󰒲  Suspend\n󰍃  Log out\n  Restart\n󰐥  Shut down\n󰊴  Gaming Mode\n' \
+    | menu Power 300 330)
+
+case "$choice" in
+    *Lock)          run lock ;;
+    *Suspend)       run suspend ;;
+    *"Log out")     run logout ;;
+    *Restart)       run reboot ;;
+    *"Shut down")   run poweroff ;;
+    *"Gaming Mode") run gaming ;;
+esac

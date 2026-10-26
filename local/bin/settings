@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+# Minimalist settings CLI for Hyprland
+
+set -uo pipefail
+
+ACCENT="#7fae6a"
+DIM="#8fae9a"
+WARN="#d4b86a"
+
+title() { gum style --foreground "$ACCENT" --bold "  $1"; }
+info()  { gum style --foreground "$DIM" "  $1"; }
+warn()  { gum style --foreground "$WARN" "  $1"; }
+pick()  { gum choose --cursor "› " --cursor.foreground "$ACCENT" --selected.foreground "$ACCENT" "$@"; }
+
+back_or_exit() {
+    echo
+    gum input --placeholder "enter to go back" >/dev/null 2>&1
+}
+
+# ── Display ───────────────────────────────────────────────
+display_menu() {
+    while :; do
+        clear; title "Display"; echo
+        hyprctl monitors all | awk '
+            /^Monitor/ { name=$2 }
+            /^\t[0-9]+x[0-9]+@/ { mode=$1 }
+            /disabled:/ { printf "  %-10s %-22s %s\n", name, mode, ($2=="true" ? "(disabled)" : "") }
+        '
+        echo
+        local choice
+        choice=$(pick "Change resolution / refresh" "Enable or disable a monitor" "Back")
+        case "$choice" in
+            "Change resolution / refresh")
+                local mon modes mode
+                mon=$(hyprctl monitors -j | jq -r '.[].name' | pick)
+                [[ -z "$mon" ]] && continue
+                modes=$(hyprctl monitors -j | jq -r --arg m "$mon" '.[] | select(.name==$m) | .availableModes[]')
+                mode=$(echo "$modes" | pick)
+                [[ -z "$mode" ]] && continue
+                mode="${mode%Hz}"
+                hyprctl keyword monitor "$mon,${mode/@/@},auto,1" >/dev/null
+                info "Set $mon to $mode"; sleep 1
+                ;;
+            "Enable or disable a monitor")
+                local mon state
+                mon=$(hyprctl monitors all -j | jq -r '.[].name' | pick)
+                [[ -z "$mon" ]] && continue
+                state=$(pick "Enable" "Disable")
+                if [[ "$state" == "Disable" ]]; then
+                    hyprctl keyword monitor "$mon,disable" >/dev/null
+                else
+                    hyprctl keyword monitor "$mon,preferred,auto,1" >/dev/null
+                fi
+                info "$mon → ${state,,}d"; sleep 1
+                ;;
+            *) return ;;
+        esac
+    done
+}
+
+# ── Audio ─────────────────────────────────────────────────
+dev_label() { wpctl inspect "$1" 2>/dev/null | awk -F'"' '/node.description/ {print $2; exit}'; }
+dev_volume() {
+    local out; out=$(wpctl get-volume "$1" 2>/dev/null)
+    [[ "$out" == *MUTED* ]] && echo "muted" \
+        || echo "$out" | awk '{printf "%d%%", $2*100}'
+}
+# $1 = Sinks|Sources, prints "<id>. <description>" lines
+list_devices() {
+    local end; [[ "$1" == "Sinks" ]] && end="Sources:" || end="Filters:"
+    wpctl status | sed -n "/├─ $1:/,/├─ $end/p" \
+        | grep -oE '[0-9]+\. .*\[vol' | sed 's/ *\[vol//'
+}
+
+audio_menu() {
+    while :; do
+        clear; title "Audio"; echo
+        info "Output: $(dev_label @DEFAULT_AUDIO_SINK@)  ·  $(dev_volume @DEFAULT_AUDIO_SINK@)"
+        info "Input:  $(dev_label @DEFAULT_AUDIO_SOURCE@)  ·  $(dev_volume @DEFAULT_AUDIO_SOURCE@)"
+        echo
+        local choice
+        choice=$(pick "Change output device" "Change input device" \
+                      "Set output volume" "Set input volume" \
+                      "Toggle output mute" "Toggle input mute" "Back")
+        case "$choice" in
+            "Change output device")
+                local line; line=$(list_devices Sinks | pick)
+                [[ -z "$line" ]] && continue
+                wpctl set-default "${line%%.*}" && info "Output → ${line#*. }"; sleep 1
+                ;;
+            "Change input device")
+                local line; line=$(list_devices Sources | pick)
+                [[ -z "$line" ]] && continue
+                wpctl set-default "${line%%.*}" && info "Input → ${line#*. }"; sleep 1
+                ;;
+            "Set output volume")
+                local v; v=$(gum input --placeholder "0-100" --prompt "› " --prompt.foreground "$ACCENT")
+                [[ "$v" =~ ^[0-9]+$ ]] && wpctl set-volume @DEFAULT_AUDIO_SINK@ "${v}%"
+                ;;
+            "Set input volume")
+                local v; v=$(gum input --placeholder "0-100" --prompt "› " --prompt.foreground "$ACCENT")
+                [[ "$v" =~ ^[0-9]+$ ]] && wpctl set-volume @DEFAULT_AUDIO_SOURCE@ "${v}%"
+                ;;
+            "Toggle output mute")
+                wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle; info "Toggled output mute"; sleep 1
+                ;;
+            "Toggle input mute")
+                wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle; info "Toggled mic mute"; sleep 1
+                ;;
+            *) return ;;
+        esac
+    done
+}
+
+# ── Bluetooth ─────────────────────────────────────────────
+bluetooth_menu() {
+    while :; do
+        clear; title "Bluetooth"; echo
+        local powered
+        powered=$(bluetoothctl show | awk '/Powered:/ {print $2}')
+        info "Adapter: ${powered:-unknown}"
+        echo "  Paired:"
+        while read -r _ mac name; do
+            if bluetoothctl info "$mac" 2>/dev/null | grep -q "Connected: yes"; then
+                gum style --foreground "$ACCENT" "    ● $name"
+            else
+                gum style --foreground "$DIM" "    ○ $name"
+            fi
+        done < <(bluetoothctl devices)
+        echo
+        local choice
+        choice=$(pick "Connect a device" "Disconnect a device" "Toggle adapter power" "Scan for new devices" "Back")
+        case "$choice" in
+            "Connect a device")
+                local sel mac
+                sel=$(bluetoothctl devices | sed 's/^Device //' | pick)
+                [[ -z "$sel" ]] && continue
+                mac="${sel%% *}"
+                gum spin --spinner dot --title "Connecting..." --spinner.foreground "$ACCENT" -- bluetoothctl connect "$mac" \
+                    && info "Connected" || warn "Failed - device may be off or out of range"
+                sleep 2
+                ;;
+            "Disconnect a device")
+                local sel mac
+                sel=$(bluetoothctl devices Connected | sed 's/^Device //' | pick)
+                [[ -z "$sel" ]] && continue
+                mac="${sel%% *}"
+                bluetoothctl disconnect "$mac" >/dev/null && info "Disconnected"; sleep 1
+                ;;
+            "Toggle adapter power")
+                if [[ "$powered" == "yes" ]]; then
+                    bluetoothctl power off >/dev/null; info "Bluetooth off"
+                else
+                    bluetoothctl power on >/dev/null; info "Bluetooth on"
+                fi
+                sleep 1
+                ;;
+            "Scan for new devices")
+                gum spin --spinner dot --title "Scanning 10s..." --spinner.foreground "$ACCENT" -- \
+                    bash -c 'bluetoothctl --timeout 10 scan on >/dev/null 2>&1'
+                info "Scan complete"; sleep 1
+                ;;
+            *) return ;;
+        esac
+    done
+}
+
+# ── Network ───────────────────────────────────────────────
+network_menu() {
+    while :; do
+        clear; title "Network"; echo
+        info "WiFi: $(nmcli radio wifi)"
+        info "Active: $(nmcli -t -f NAME connection show --active | paste -sd', ' -)"
+        echo
+        local choice
+        choice=$(pick "Connect to a network" "Toggle WiFi" "Disconnect" "Back")
+        case "$choice" in
+            "Connect to a network")
+                local ssid pass
+                ssid=$(nmcli -t -f SSID device wifi list | grep -v '^$' | sort -u | pick)
+                [[ -z "$ssid" ]] && continue
+                if nmcli -t -f NAME connection show | grep -qx "$ssid"; then
+                    nmcli connection up "$ssid" >/dev/null 2>&1 && info "Connected to $ssid" || warn "Failed"
+                else
+                    pass=$(gum input --password --placeholder "password" --prompt "› " --prompt.foreground "$ACCENT")
+                    nmcli device wifi connect "$ssid" password "$pass" >/dev/null 2>&1 \
+                        && info "Connected to $ssid" || warn "Failed"
+                fi
+                sleep 2
+                ;;
+            "Toggle WiFi")
+                if [[ "$(nmcli radio wifi)" == "enabled" ]]; then
+                    nmcli radio wifi off; info "WiFi off"
+                else
+                    nmcli radio wifi on; info "WiFi on"
+                fi
+                sleep 1
+                ;;
+            "Disconnect")
+                local con
+                con=$(nmcli -t -f NAME connection show --active | pick)
+                [[ -n "$con" ]] && nmcli connection down "$con" >/dev/null && info "Disconnected"; sleep 1
+                ;;
+            *) return ;;
+        esac
+    done
+}
+
+# ── Brightness ────────────────────────────────────────────
+brightness_menu() {
+    clear; title "Brightness"; echo
+    info "Current: $(brightnessctl -m 2>/dev/null | cut -d, -f4)"
+    echo
+    local v
+    v=$(gum input --placeholder "0-100" --prompt "› " --prompt.foreground "$ACCENT")
+    [[ "$v" =~ ^[0-9]+$ ]] && brightnessctl set "${v}%" >/dev/null && info "Set to ${v}%"
+    sleep 1
+}
+
+# ── Power ─────────────────────────────────────────────────
+confirm() {
+    gum confirm --default=false \
+        --prompt.foreground "$WARN" \
+        --selected.background "$ACCENT" --selected.foreground "#142015" \
+        "$1"
+}
+
+power_menu() {
+    while :; do
+        clear; title "Power"; echo
+        info "Uptime:$(uptime -p | sed 's/^up//')"
+        echo
+        local choice
+        choice=$(pick "Lock" "Suspend" "Log out" "Restart" "Shut down" "Gaming Mode" "Back")
+        case "$choice" in
+            Lock)       clear; hyprlock & return ;;
+            Suspend)    clear; systemctl suspend; return ;;
+            "Log out")
+                confirm "Log out of Hyprland?" && { clear; hyprctl dispatch exit; return; }
+                ;;
+            Restart)
+                confirm "Restart now?" && { clear; systemctl reboot; return; }
+                ;;
+            "Shut down")
+                confirm "Shut down now?" && { clear; systemctl poweroff; return; }
+                ;;
+            "Gaming Mode")
+                confirm "Switch to Gaming Mode?" && { clear; steamos-session-select gamescope; return; }
+                ;;
+            *) return ;;
+        esac
+    done
+}
+
+# ── Main ──────────────────────────────────────────────────
+main() {
+    while :; do
+        clear
+        gum style --border rounded --border-foreground "$ACCENT" --padding "0 2" --margin "1 1" \
+            --foreground "$ACCENT" --bold "settings"
+        local choice
+        choice=$(pick "Display" "Audio" "Bluetooth" "Network" "Brightness" "Power" "Quit")
+        case "$choice" in
+            Display)    display_menu ;;
+            Audio)      audio_menu ;;
+            Bluetooth)  bluetooth_menu ;;
+            Network)    network_menu ;;
+            Brightness) brightness_menu ;;
+            Power)      power_menu ;;
+            *)          clear; exit 0 ;;
+        esac
+    done
+}
+
+main "$@"

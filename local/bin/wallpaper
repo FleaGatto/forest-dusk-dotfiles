@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Puts the Forest Dusk wallpaper up.
+#
+# hyprpaper 0.8.4 as packaged here ignores its config file completely: a valid
+# hyprpaper.conf, a garbage key and a path that does not exist all behave the
+# same, and every output comes up "no target: no wp will be created". The IPC
+# still works, so the wallpaper goes on over the socket instead, and
+# hyprpaper.conf is kept only for whenever that gets fixed upstream.
+#
+#   wallpaper [path]
+set -uo pipefail
+
+WALL="${1:-$HOME/Pictures/Wallpapers/forest-dusk.png}"
+
+if [ ! -f "$WALL" ]; then
+    echo "wallpaper: no such image: $WALL" >&2
+    exit 1
+fi
+
+pgrep -x hyprpaper >/dev/null 2>&1 || setsid -f hyprpaper >/dev/null 2>&1
+
+# The socket is not up the instant hyprpaper is, so keep trying briefly.
+# hyprctl prints its connection errors on stdout, so a non-empty listactive
+# proves nothing -- match the image instead. listactive answers with the
+# /var/home path while this script is handed /home, so compare basenames.
+base=${WALL##*/}
+for _ in $(seq 20); do
+    hyprctl hyprpaper wallpaper ",$WALL" >/dev/null 2>&1
+    case "$(hyprctl hyprpaper listactive 2>/dev/null)" in
+        *"$base"*) exit 0 ;;
+    esac
+    sleep 0.25
+done
+
+echo "wallpaper: hyprpaper did not accept $WALL" >&2
+exit 1

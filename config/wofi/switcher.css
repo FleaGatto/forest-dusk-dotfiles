@@ -1,0 +1,27 @@
+/* Forest Dusk -- matches ~/.config/wofi/style.css, tuned for a window list:
+   monospace rows so the workspace / class / title columns line up. */
+* { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 13px; }
+
+window {
+  background-color: rgba(20, 31, 22, 0.88);
+  border: 1px solid rgba(127, 174, 106, 0.35);
+  border-radius: 20px;
+}
+
+#outer-box { padding: 14px; }
+
+#input {
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgba(127, 174, 106, 0.3);
+  border-radius: 14px;
+  background-color: rgba(28, 42, 30, 0.9);
+  color: #e8e4d0;
+}
+#input:focus { border-color: #7fae6a; }
+
+#entry { padding: 7px 10px; border-radius: 12px; }
+#entry:selected { background: linear-gradient(135deg, rgba(74, 124, 63, 0.55), rgba(127, 174, 106, 0.35)); }
+
+#text { color: #e8e4d0; margin-left: 8px; }
+#entry:selected #text { color: #ffffff; font-weight: 600; }

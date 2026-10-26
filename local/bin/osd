@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# On-screen feedback for the volume/brightness keys, drawn by swaync.
+#
+#   osd volume up|down|mute
+#   osd mic mute
+#   osd brightness up|down
+#
+# Each category reuses one notification slot so holding a key updates the
+# bar in place instead of stacking a column of popups.
+
+set -uo pipefail
+
+SINK='@DEFAULT_AUDIO_SINK@'
+SOURCE='@DEFAULT_AUDIO_SOURCE@'
+STEP='5'
+
+notify() {
+    local tag=$1 icon=$2 title=$3 value=$4
+    # transient keeps these out of the notification centre's history, so
+    # holding a volume key does not bury real notifications
+    notify-send \
+        -a osd \
+        -t 1200 \
+        -h 'boolean:transient:true' \
+        -h "string:x-canonical-private-synchronous:osd-$tag" \
+        -h "int:value:$value" \
+        -h 'string:synchronous:osd' \
+        -i "$icon" \
+        "$title"
+}
+
+# Prints the integer percentage, or -1 when muted
+wp_level() {
+    local out
+    out=$(wpctl get-volume "$1" 2>/dev/null) || return 1
+    [[ "$out" == *MUTED* ]] && { echo -1; return 0; }
+    echo "$out" | awk '{printf "%d", $2*100 + 0.5}'
+}
+
+show_sink() {
+    local level; level=$(wp_level "$SINK") || return
+    if (( level < 0 )); then
+        notify volume audio-volume-muted 'Muted' 0
+    else
+        notify volume audio-volume-high "Volume  ${level}%" "$level"
+    fi
+}
+
+show_source() {
+    local level; level=$(wp_level "$SOURCE") || return
+    if (( level < 0 )); then
+        notify mic microphone-sensitivity-muted 'Microphone muted' 0
+    else
+        notify mic audio-input-microphone "Microphone  ${level}%" "$level"
+    fi
+}
+
+show_backlight() {
+    local level; level=$(brightnessctl -m 2>/dev/null | cut -d, -f4 | tr -d '%')
+    [[ -z "$level" ]] && return
+    notify brightness display-brightness "Brightness  ${level}%" "$level"
+}
+
+case "${1:-}" in
+    volume)
+        case "${2:-}" in
+            # -l 1 caps at 100% so the bar cannot run past full
+            up)   wpctl set-volume -l 1 "$SINK" "${STEP}%+" ;;
+            down) wpctl set-volume "$SINK" "${STEP}%-" ;;
+            mute) wpctl set-mute "$SINK" toggle ;;
+        esac
+        show_sink
+        ;;
+    mic)
+        [[ "${2:-}" == mute ]] && wpctl set-mute "$SOURCE" toggle
+        show_source
+        ;;
+    brightness)
+        case "${2:-}" in
+            up)   brightnessctl -q set "${STEP}%+" ;;
+            down) brightnessctl -q set "${STEP}%-" ;;
+        esac
+        show_backlight
+        ;;
+    *)
+        echo "usage: osd {volume up|down|mute | mic mute | brightness up|down}" >&2
+        exit 1
+        ;;
+esac
