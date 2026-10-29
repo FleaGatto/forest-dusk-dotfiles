@@ -19,32 +19,31 @@
   "custom/power": { "format": "󰐥", "tooltip": false, "on-click": "powermenu" },
   "hyprland/workspaces": {
     "format": "{icon}",
-    "format-icons": { "active": "", "default": "", "empty": "" },
-    "persistent-workspaces": { "*": 5 },
+    "format-icons": { "active": "", "default": "󰝥", "empty": "" },
     "on-scroll-up": "hyprctl dispatch workspace e-1",
     "on-scroll-down": "hyprctl dispatch workspace e+1"
   },
   "hyprland/window": { "max-length": 40, "separate-outputs": true },
   "clock": {
-    "format": "  {:%H:%M}",
-    "format-alt": "  {:%a %d %b}",
+    "format": "󰅐  {:%H:%M}",
+    "format-alt": "󰃭  {:%a %d %b}",
     "tooltip-format": "<tt>{calendar}</tt>",
     "calendar": { "format": { "today": "<span color='#d4b86a'><b>{}</b></span>" } }
   },
   "mpris": {
     "format": "{status_icon} {title}",
-    "status-icons": { "playing": "", "paused": "" },
+    "status-icons": { "playing": "󰐊", "paused": "󰏤" },
     "max-length": 30
   },
   "pulseaudio": {
     "format": "{icon} {volume}%",
     "format-muted": "󰝟 muted",
-    "format-icons": { "default": ["", "", ""], "headphone": "󰋋" },
+    "format-icons": { "default": ["󰕿", "󰖀", "󰕾"], "headphone": "󰋋" },
     "on-click": "pavucontrol",
     "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
   },
   "network": {
-    "format-wifi": "  {essid}",
+    "format-wifi": "󰖩  {essid}",
     "format-ethernet": "󰈀 wired",
     "format-disconnected": "󰖪 offline",
     "tooltip-format": "{ifname} · {ipaddr}"
@@ -55,8 +54,8 @@
     "interval": 5,
     "on-click": "pkill -f 'fleasion.*launcher.py' || setsid -f ~/fleasion-wt/issue115/.venv/bin/python ~/fleasion-wt/issue115/launcher.py"
   },
-  "cpu": { "format": " {usage}%", "interval": 3 },
-  "memory": { "format": " {percentage}%", "interval": 5 },
+  "cpu": { "format": "󰍛 {usage}%", "interval": 3 },
+  "memory": { "format": "󰘚 {percentage}%", "interval": 5 },
   "battery": {
     "states": { "warning": 25, "critical": 12 },
     "format": "{icon} {capacity}%",

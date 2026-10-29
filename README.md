@@ -34,25 +34,35 @@ Moss green, deep green and gold on a near-black forest background:
 
 ```sh
 git clone https://github.com/<you>/forest-dusk-dotfiles ~/forest-dusk-dotfiles
-cd ~/forest-dusk-dotfiles && ./install.sh
+cd ~/forest-dusk-dotfiles && ./install-fedora.sh
 ```
+
+`install-fedora.sh` installs the dependencies, fetches the Nerd Font, applies the
+GSettings that actually decide the GTK theme, then links everything. It handles
+both Fedora Workstation (`dnf`) and Fedora Atomic (`rpm-ostree`, needs a reboot).
+
+`./install.sh` on its own only links files -- use it when the dependencies are
+already in place. `--copy` copies instead of symlinking.
 
 Wallpapers are not tracked here; `hyprpaper.conf` and `hyprlock.conf` expect
 `~/Pictures/Wallpapers/forest-dusk.png`.
 
 ### Dependencies
 
-Layered with `rpm-ostree install`:
+The package list lives in `install-fedora.sh`, grouped by what calls each one, so
+there is one list rather than two that drift apart. Every name in it is checked
+against the Fedora 43 repositories.
 
-```
-hyprland hyprlock hypridle hyprpaper hyprpolkitagent hyprshot
-xdg-desktop-portal-hyprland waybar wofi SwayNotificationCenter kitty
-cliphist grim slurp brightnessctl playerctl pavucontrol blueman
-network-manager-applet
-```
+Two things it deliberately does not fetch:
 
-Plus `gum`, `jq` and `socat`, the `JetBrainsMono Nerd Font` and `Inter` families,
-and the `catppuccin-mocha-mauve-cursors` cursor theme in `~/.local/share/icons`.
+- **`catppuccin-mocha-mauve-cursors`** -- not packaged by Fedora. Take it from
+  [catppuccin/cursors](https://github.com/catppuccin/cursors) into
+  `~/.local/share/icons`, or change the name in `config/gtk-3.0/settings.ini` and
+  in `hyprland.conf`'s `setcursor` line.
+- **Wallpapers** -- see above.
+
+`local/bin/de-switcher` writes SDDM's autologin session, so it only does anything
+with SDDM as the display manager.
 
 ## Notes for this machine
 

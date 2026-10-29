@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Privileged half of de-switcher. Runs as root via pkexec.
+# Writes the SDDM autologin drop-in that decides which desktop you land in.
+#
+# Takes exactly one argument: a session id (desktop file name without .desktop),
+# or the literal string "greeter" to disable autologin and get the login screen.
+#
+# Every value written here is validated against the real session files on disk
+# first, so a bad argument can't turn into arbitrary root-written config.
+
+set -euo pipefail
+
+# Deliberately the same file steamos-session-select owns. It rewrites this file
+# wholesale on every run, so sharing it keeps one source of truth: whichever tool
+# ran last wins, and neither silently overrides the other. A separate
+# higher-sorting file would make this script quietly beat the Deck's own
+# gamescope switcher.
+DROPIN=/etc/sddm.conf.d/zz-steamos-autologin.conf
+SESSION_DIRS=(/usr/share/wayland-sessions /usr/share/xsessions
+              /usr/local/share/wayland-sessions /usr/local/share/xsessions)
+
+die() { printf 'de-switcher-apply: %s\n' "$1" >&2; exit 1; }
+
+[[ $# -eq 1 ]] || die "expected exactly one argument, got $#"
+target=$1
+
+if [[ $target == greeter ]]; then
+  # Blanking User= overrides the User set in steamos.conf, which sorts earlier.
+  cat > "$DROPIN" <<CONF
+# Written by de-switcher. Autologin disabled -- SDDM shows the login screen
+# so you can pick a session by hand.
+[Autologin]
+User=
+Session=
+Relogin=false
+CONF
+  chmod 0644 "$DROPIN"
+  printf 'autologin disabled; login screen will be shown\n'
+  exit 0
+fi
+
+# The user we autologin as: whoever invoked pkexec, not root.
+owner=${PKEXEC_UID:-}
+if [[ -n $owner ]]; then
+  owner=$(getent passwd "$owner" | cut -d: -f1) || die "cannot resolve PKEXEC_UID"
+fi
+[[ -n $owner ]] || die "cannot determine the invoking user"
+[[ $owner != root ]] || die "refusing to set root as the autologin user"
+
+# Reject anything that isn't a plain desktop-file id before it reaches the disk.
+[[ $target == *[!a-zA-Z0-9._-]* ]] && die "illegal characters in session id: $target"
+[[ $target == .* ]] && die "session id may not start with a dot"
+
+found=
+for dir in "${SESSION_DIRS[@]}"; do
+  if [[ -r "$dir/$target.desktop" ]]; then found="$dir/$target.desktop"; break; fi
+done
+[[ -n $found ]] || die "no such session on this system: $target.desktop"
+
+# User and Relogin already come from steamos.conf, which sorts earlier; writing
+# only Session here matches exactly what steamos-session-select writes.
+cat > "$DROPIN" <<CONF
+# Written by de-switcher. Shared with steamos-session-select; last writer wins.
+[Autologin]
+User=$owner
+Session=$target.desktop
+Relogin=true
+CONF
+chmod 0644 "$DROPIN"
+
+printf 'autologin session set to %s (from %s) for user %s\n' "$target.desktop" "$found" "$owner"

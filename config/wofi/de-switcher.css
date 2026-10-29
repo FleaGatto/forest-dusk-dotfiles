@@ -1,0 +1,28 @@
+/* Forest Dusk -- same palette as ~/.config/wofi/style.css and switcher.css.
+   Monospace rows so the name / type / description columns line up, which is
+   what the padding in de-switcher is counting on. */
+* { font-family: "JetBrainsMono Nerd Font", monospace; font-size: 13px; }
+
+window {
+  background-color: rgba(20, 31, 22, 0.88);
+  border: 1px solid rgba(127, 174, 106, 0.35);
+  border-radius: 20px;
+}
+
+#outer-box { padding: 14px; }
+
+#input {
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgba(127, 174, 106, 0.3);
+  border-radius: 14px;
+  background-color: rgba(28, 42, 30, 0.9);
+  color: #e8e4d0;
+}
+#input:focus { border-color: #7fae6a; }
+
+#entry { padding: 9px 12px; border-radius: 12px; }
+#entry:selected { background: linear-gradient(135deg, rgba(74, 124, 63, 0.55), rgba(127, 174, 106, 0.35)); }
+
+#text { color: #e8e4d0; margin-left: 8px; }
+#entry:selected #text { color: #ffffff; }

@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# de-switcher -- pick a desktop environment and log into it.
+#
+# The menu is a fixed list of five desktops, in this order: KDE, GNOME, XFCE,
+# Compiz, Hyprland. Nothing is discovered or enumerated; edit DESKTOPS below to
+# change what appears.
+#
+# The one thing still read off disk is whether the desktop you *picked* is
+# actually installed, checked only at that point. Pointing SDDM's autologin at a
+# session file that doesn't exist leaves you at a greeter or a black screen on
+# the next boot, so a missing desktop is reported instead of written.
+#
+#   de-switcher              show the menu and switch
+#   de-switcher --list       print the five and whether each is installed
+#   de-switcher --set NAME   switch by name (kde, gnome, xfce, compiz, hyprland)
+#   de-switcher --no-logout  set the next session but stay where you are
+#   de-switcher --force      skip the confirmation step
+#   de-switcher --greeter    hand the next login back to the SDDM greeter
+
+set -euo pipefail
+
+# key | label | type | XDG_CURRENT_DESKTOP name | candidate session files, best first | description
+DESKTOPS=(
+  "kde|KDE Plasma|Wayland|KDE|plasma plasmawayland plasma-wayland plasmax11 plasma-x11|Full featured Qt desktop, deeply themeable"
+  "gnome|GNOME|Wayland|GNOME|gnome-wayland gnome gnome-xorg|Clean GNOME Shell desktop, mouse and touch friendly"
+  "xfce|XFCE|X11|XFCE|xfce xfce-session xfce4-session|Lightweight traditional desktop, very low overhead"
+  "compiz|Compiz|X11|Compiz|compiz compiz-session compiz-decorated|Classic compositing window manager, famously the cube"
+  "hyprland|Hyprland|Wayland|Hyprland|hyprland-uwsm hyprland|Dynamic tiling compositor, your Forest Dusk rice"
+)
+
+SESSION_DIRS=(
+  /usr/share/wayland-sessions
+  /usr/share/xsessions
+  /usr/local/share/wayland-sessions
+  /usr/local/share/xsessions
+  "${XDG_DATA_HOME:-$HOME/.local/share}/wayland-sessions"
+  "${XDG_DATA_HOME:-$HOME/.local/share}/xsessions"
+)
+WOFI_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/wofi/de-switcher.conf"
+WOFI_CSS="${XDG_CONFIG_HOME:-$HOME/.config}/wofi/de-switcher.css"
+APPLY=$(dirname "$(realpath "$0")")/de-switcher-apply
+
+do_logout=1 force=0 mode=menu preset=
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --list)      mode=list ;;
+    --set)       mode=set; preset=${2:?--set needs a desktop name}; shift ;;
+    --greeter)   mode=greeter ;;
+    --no-logout) do_logout=0 ;;
+    --force)     force=1 ;;
+    -h|--help)   sed -n '2,18p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    *)           printf 'unknown option: %s (try --help)\n' "$1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+note() { command -v notify-send >/dev/null && notify-send -a "Desktop Switcher" "$@" || printf '%s\n' "$*"; }
+die()  { note -u critical "Desktop Switcher" "$1"; printf 'de-switcher: %s\n' "$1" >&2; exit 1; }
+
+# First candidate session file that exists, or nothing if the desktop isn't here.
+resolve() {
+  local cand dir
+  for cand in $1; do
+    for dir in "${SESSION_DIRS[@]}"; do
+      [[ -r "$dir/$cand.desktop" ]] && { printf '%s' "$cand"; return 0; }
+    done
+  done
+  return 1
+}
+
+# Is this desktop the one currently running? XDG_CURRENT_DESKTOP is the signal
+# that's reliably present in session children (it's what waybar has), whereas
+# DESKTOP_SESSION is missing from a uwsm-started Hyprland entirely -- so check
+# the desktop name first and only then fall back to the session-file names.
+is_here() {
+  local want=${1,,} tok cand
+  for tok in ${XDG_CURRENT_DESKTOP//:/ }; do
+    [[ ${tok,,} == "$want" ]] && return 0
+  done
+  for cand in $2; do
+    [[ ${DESKTOP_SESSION:-} == "$cand" || ${XDG_SESSION_DESKTOP:-} == "$cand" ]] && return 0
+  done
+  return 1
+}
+
+pango_escape() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+
+pad() {
+  local str=$1 width=$2
+  if (( ${#str} > width )); then
+    printf '%s… ' "${str:0:$((width - 2))}"
+  else
+    printf '%-*s' "$width" "$str"
+  fi
+}
+
+# -------------------------------------------------------------------- list mode
+if [[ $mode == list ]]; then
+  printf '%-10s %-12s %-9s %-14s %s\n' KEY DESKTOP TYPE STATE DESCRIPTION
+  printf '%-10s %-12s %-9s %-14s %s\n' ---------- ------------ --------- -------------- -----------
+  for rec in "${DESKTOPS[@]}"; do
+    IFS='|' read -r key label kind xdg cands desc <<< "$rec"
+    if is_here "$xdg" "$cands"; then state=current
+    elif resolve "$cands" >/dev/null; then state=installed
+    else state="not installed"; fi
+    printf '%-10s %-12s %-9s %-14s %s\n' "$key" "$label" "$kind" "$state" "$desc"
+  done
+  exit 0
+fi
+
+# ---------------------------------------------------------------------- choose
+if [[ $mode == greeter ]]; then
+  chosen=greeter
+elif [[ $mode == set ]]; then
+  chosen=${preset,,}
+  ok=0
+  for rec in "${DESKTOPS[@]}"; do [[ ${rec%%|*} == "$chosen" ]] && ok=1 && break; done
+  (( ok )) || die "no desktop called '$preset' (try: kde, gnome, xfce, compiz, hyprland)"
+else
+  keys=() display=()
+  for rec in "${DESKTOPS[@]}"; do
+    IFS='|' read -r key label kind xdg cands desc <<< "$rec"
+    marker="  " tail=""
+    if is_here "$xdg" "$cands"; then
+      marker="● "; tail=" <span foreground=\"#7fae6a\">running now</span>"
+    elif ! resolve "$cands" >/dev/null; then
+      tail=" <span foreground=\"#8a8f82\">not installed</span>"
+    fi
+    keys+=("$key")
+    display+=("${marker}<b>$(pango_escape "$(pad "$label" 14)")</b><span alpha=\"55%\">$(pad "$kind" 9)</span><span alpha=\"70%\">$(pango_escape "$desc")</span>${tail}")
+  done
+
+  # wofi echoes back the exact line it was handed, so map that line to a key.
+  picked=$(printf '%s\n' "${display[@]}" | wofi --dmenu --allow-markup \
+             --conf "$WOFI_CONF" --style "$WOFI_CSS" \
+             --prompt "Switch desktop…" --lines $(( ${#display[@]} + 1 )) 2>/dev/null) || exit 0
+  [[ -n $picked ]] || exit 0
+  chosen=""
+  for i in "${!display[@]}"; do
+    [[ ${display[$i]} == "$picked" ]] && chosen=${keys[$i]} && break
+  done
+  [[ -n $chosen ]] || exit 0
+fi
+
+# --------------------------------------------------------------------- resolve
+if [[ $chosen == greeter ]]; then
+  label="the login screen" session=greeter
+else
+  for rec in "${DESKTOPS[@]}"; do
+    IFS='|' read -r key label kind xdg cands desc <<< "$rec"
+    [[ $key == "$chosen" ]] || continue
+    is_here "$xdg" "$cands" && { note "Already here" "You're running <b>${label}</b> right now."; exit 0; }
+    session=$(resolve "$cands") || die "${label} isn't installed on this system yet."
+    break
+  done
+fi
+
+# -------------------------------------------------------------------- confirm
+if (( force == 0 && do_logout == 1 )); then
+  answer=$(printf '%s\n' \
+    "Switch to ${label} now — closes everything that's open" \
+    "Cancel" |
+    wofi --dmenu --allow-markup --conf "$WOFI_CONF" --style "$WOFI_CSS" \
+         --prompt "Log out and switch?" --lines 3 2>/dev/null) || exit 0
+  [[ $answer == Switch* ]] || exit 0
+fi
+
+# ----------------------------------------------------------------------- apply
+[[ -x $APPLY ]] || die "helper not found or not executable: $APPLY"
+if ! out=$(pkexec "$APPLY" "$session" 2>&1); then
+  die "could not set the session: ${out:-pkexec was dismissed}"
+fi
+
+if (( do_logout == 0 )); then
+  note "Queued" "<b>${label}</b> will start at your next login."
+  exit 0
+fi
+
+note "Switching" "Logging out and starting <b>${label}</b>…"
+sleep 1
+
+# Tear the current session down the way it expects to be torn down. uwsm's own
+# check is used rather than sniffing DESKTOP_SESSION, which isn't set here.
+if command -v uwsm >/dev/null && uwsm check is-active >/dev/null 2>&1; then
+  exec uwsm stop
+elif [[ ${XDG_CURRENT_DESKTOP:-} == *Hyprland* ]] && command -v hyprctl >/dev/null; then
+  exec hyprctl dispatch exit
+elif [[ ${XDG_CURRENT_DESKTOP:-} == *GNOME* ]] && command -v gnome-session-quit >/dev/null; then
+  exec gnome-session-quit --logout --no-prompt
+else
+  exec loginctl terminate-session "${XDG_SESSION_ID:-self}"
+fi
