@@ -45,6 +45,12 @@ PKGS+=(xdg-desktop-portal-hyprland xdg-desktop-portal-gtk polkit)
 # theming -- adw-gtk3-dark is the only theme here shipping real gtk-3.0 CSS,
 # and the configs ask for Inter by name
 PKGS+=(adw-gtk3-theme papirus-icon-theme rsms-inter-fonts google-noto-emoji-fonts)
+# session plumbing. Wayland itself and XWayland need no entry here -- hyprland
+# hard-requires wayland-client/server, wayland-protocols, libseat, libEGL and
+# xorg-x11-server-Xwayland, so rpm pulls them in. What a clean Fedora lacks is a
+# display manager, and de-switcher writes SDDM's autologin specifically, so it
+# has to be SDDM. Qt apps fall back to XWayland without qtwayland.
+PKGS+=(sddm qt6-qtwayland qt5-qtwayland mesa-dri-drivers mesa-vulkan-drivers xdg-user-dirs)
 
 atomic() { [ -f /run/ostree-booted ]; }
 needs_reboot=0
@@ -113,8 +119,12 @@ Two things this script deliberately does not fetch:
   Wallpaper     hyprpaper.conf and hyprlock.conf expect
                 ~/Pictures/Wallpapers/forest-dusk.png
 
-local/bin/de-switcher writes SDDM's autologin session, so it needs SDDM as the
-display manager to do anything.
+local/bin/de-switcher writes SDDM's autologin session, so SDDM has to be the
+display manager for it to do anything. The package is installed but NOT enabled,
+because switching display manager on a machine that already has one (GDM on
+Fedora Workstation) is not something to do behind your back:
+
+  sudo systemctl disable gdm && sudo systemctl enable sddm
 NOTE
 
 if [ "$needs_reboot" = 1 ]; then
